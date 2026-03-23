@@ -1,0 +1,147 @@
+// ===========================================
+// Municipal Helpdesk System — Prisma Schema
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Enums ----
+
+enum UserRole {
+  CITIZEN
+  ADMIN
+  DEPT_WORKER
+  OFFICER
+}
+
+enum TicketStatus {
+  PENDING_AI
+  PENDING_ADMIN
+  ASSIGNED
+  RESOLVED
+  ESCALATED_TO_ADMIN
+  REJECTED
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  MOCKED
+}
+
+// ---- Models ----
+
+/// User model — supports Citizen, Admin, Dept Worker, and Officer roles.
+model User {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(255)
+  email            String   @unique @db.VarChar(255)
+  passwordHash     String   @map("password_hash") @db.VarChar(255)
+  phoneEncrypted   String?  @map("phone_encrypted") @db.Text
+  addressEncrypted String?  @map("address_encrypted") @db.Text
+  role             UserRole @default(CITIZEN)
+  departmentId     Int?     @map("department_id")
+  emailVerified    Boolean  @default(false) @map("email_verified")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  department         Department?     @relation(fields: [departmentId], references: [id])
+  createdTickets     Ticket[]        @relation("CitizenTickets")
+  assignedTickets    Ticket[]        @relation("WorkerTickets")
+  otps               OTP[]
+  notifications      NotificationLog[] @relation("RecipientNotifications")
+
+  @@map("users")
+}
+
+/// Department model — municipal departments (Water, Electricity, etc.)
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  aiLabel     String?  @unique @map("ai_label") @db.VarChar(100)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  workers              User[]
+  recommendedTickets   Ticket[] @relation("RecommendedDepartment")
+  assignedTickets      Ticket[] @relation("AssignedDepartment")
+
+  @@map("departments")
+}
+
+/// Ticket model — civic issue reports with full lifecycle tracking
+model Ticket {
+  id                        Int          @id @default(autoincrement())
+  citizenId                 Int          @map("citizen_id")
+  description               String?      @db.Text
+  imageUrl                  String       @map("image_url") @db.VarChar(500)
+  latitude                  Decimal      @db.Decimal(10, 7)
+  longitude                 Decimal      @db.Decimal(10, 7)
+  status                    TicketStatus @default(PENDING_AI)
+  recommendedDepartmentId   Int?         @map("recommended_department_id")
+  aiConfidenceScore         Decimal?     @map("ai_confidence_score") @db.Decimal(5, 4)
+  assignedDepartmentId      Int?         @map("assigned_department_id")
+  assignedWorkerId          Int?         @map("assigned_worker_id")
+  aiRecommendationAccepted  Boolean?     @map("ai_recommendation_accepted")
+  resolutionImageUrl        String?      @map("resolution_image_url") @db.VarChar(500)
+  resolutionNotes           String?      @map("resolution_notes") @db.Text
+  escalationReason          String?      @map("escalation_reason") @db.Text
+  adminResolutionNotes      String?      @map("admin_resolution_notes") @db.Text
+  assignedAt                DateTime?    @map("assigned_at")
+  resolvedAt                DateTime?    @map("resolved_at")
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  citizen                User       @relation("CitizenTickets", fields: [citizenId], references: [id])
+  recommendedDepartment  Department? @relation("RecommendedDepartment", fields: [recommendedDepartmentId], references: [id])
+  assignedDepartment     Department? @relation("AssignedDepartment", fields: [assignedDepartmentId], references: [id])
+  assignedWorker         User?       @relation("WorkerTickets", fields: [assignedWorkerId], references: [id])
+  notifications          NotificationLog[]
+
+  @@map("tickets")
+}
+
+/// Notification log — tracks all emails sent for ticket status changes
+model NotificationLog {
+  id              Int                @id @default(autoincrement())
+  ticketId        Int                @map("ticket_id")
+  recipientUserId Int                @map("recipient_user_id")
+  emailTo         String             @map("email_to") @db.VarChar(255)
+  subject         String             @db.VarChar(500)
+  body            String             @db.Text
+  status          NotificationStatus
+  sentAt          DateTime           @default(now()) @map("sent_at")
+
+  // Relations
+  ticket    Ticket @relation(fields: [ticketId], references: [id])
+  recipient User   @relation("RecipientNotifications", fields: [recipientUserId], references: [id])
+
+  @@map("notification_logs")
+}
+
+/// OTP model — email verification one-time passwords
+model OTP {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  otpCode   String   @map("otp_code") @db.VarChar(6)
+  expiresAt DateTime @map("expires_at")
+  isUsed    Boolean  @default(false) @map("is_used")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("otps")
+}
