@@ -15,6 +15,72 @@ const { sendSuccess, sendError } = require('../utils/helpers');
 // All analytics routes require authentication + OFFICER or ADMIN role
 router.use(authenticate, requireRole('OFFICER', 'ADMIN'));
 
+// ---- GET /api/analytics/overview ----
+// Consolidated payload for officer command center widgets.
+router.get('/overview', async (req, res) => {
+  try {
+    const [
+      totalTickets,
+      resolvedTickets,
+      resolvedWithTiming,
+      ticketsByDepartment,
+      criticalOpenTickets,
+    ] = await Promise.all([
+      prisma.ticket.count(),
+      prisma.ticket.count({ where: { status: 'RESOLVED' } }),
+      prisma.ticket.findMany({
+        where: {
+          status: 'RESOLVED',
+          assignedAt: { not: null },
+          resolvedAt: { not: null },
+        },
+        select: {
+          assignedAt: true,
+          resolvedAt: true,
+        },
+      }),
+      prisma.department.findMany({
+        orderBy: { name: 'asc' },
+        include: {
+          _count: {
+            select: { assignedTickets: true },
+          },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          priority: 'CRITICAL',
+          status: { notIn: ['RESOLVED', 'REJECTED'] },
+        },
+      }),
+    ]);
+
+    let avgResolutionTime = null;
+    if (resolvedWithTiming.length > 0) {
+      const totalMs = resolvedWithTiming.reduce((sum, ticket) => {
+        return sum + (ticket.resolvedAt.getTime() - ticket.assignedAt.getTime());
+      }, 0);
+      avgResolutionTime = parseFloat((totalMs / resolvedWithTiming.length / (1000 * 60 * 60)).toFixed(1));
+    }
+
+    const resolutionRate = totalTickets > 0
+      ? parseFloat(((resolvedTickets / totalTickets) * 100).toFixed(1))
+      : 0;
+
+    return sendSuccess(res, {
+      totalTickets,
+      resolvedTickets,
+      resolutionRate,
+      avgResolutionTime,
+      criticalOpenTickets,
+      ticketsByDepartment,
+    });
+  } catch (error) {
+    console.error('Analytics — overview error:', error);
+    return sendError(res, 'Failed to fetch analytics overview.');
+  }
+});
+
 // ---- GET /api/analytics/tickets-by-department ----
 // Count of tickets grouped by assigned department.
 router.get('/tickets-by-department', async (req, res) => {
@@ -233,6 +299,140 @@ router.get('/monthly-trend', async (req, res) => {
   } catch (error) {
     console.error('Analytics — monthly trend error:', error);
     return sendError(res, 'Failed to fetch analytics data.');
+  }
+});
+
+// ---- GET /api/analytics/anomalies ----
+// Detects volume spikes, SLA clusters, and escalation surges.
+router.get('/anomalies', async (req, res) => {
+  try {
+    const alerts = [];
+    
+    // 1. Volume Spikes (e.g. > 10 tickets today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTickets = await prisma.ticket.count({
+      where: { createdAt: { gte: today } }
+    });
+    if (todayTickets > 10) {
+      alerts.push({
+        type: 'VOLUME_SPIKE',
+        severity: 'warning',
+        title: 'High Influx of Reports',
+        description: 'Ticket volume today is significantly higher than the daily average.',
+        metric: todayTickets,
+        threshold: 10,
+      });
+    }
+
+    // 2. Escalation Surges (e.g. > 3 unresolved escalations)
+    const escalated = await prisma.ticket.count({
+      where: { status: 'ESCALATED_TO_ADMIN' }
+    });
+    if (escalated >= 3) {
+      alerts.push({
+        type: 'ESCALATION_SURGE',
+        severity: 'critical',
+        title: 'Escalation Bottleneck',
+        description: 'Multiple tickets have been escalated and require immediate admin resolution.',
+        metric: escalated,
+        threshold: 3,
+      });
+    }
+
+    // 3. SLA Clusters (e.g. > 5 tickets breached in a specific department)
+    const slaMs = 48 * 60 * 60 * 1000;
+    const activeTickets = await prisma.ticket.findMany({
+      where: { status: 'ASSIGNED', assignedAt: { not: null } },
+      select: { assignedDepartmentId: true, assignedAt: true },
+    });
+    const breachedByDept = {};
+    const now = Date.now();
+    for (const t of activeTickets) {
+      if (now - t.assignedAt.getTime() > slaMs) {
+        breachedByDept[t.assignedDepartmentId] = (breachedByDept[t.assignedDepartmentId] || 0) + 1;
+      }
+    }
+    
+    for (const [deptId, count] of Object.entries(breachedByDept)) {
+      if (count >= 5) {
+        const dept = await prisma.department.findUnique({ where: { id: parseInt(deptId) } });
+        alerts.push({
+          type: 'SLA_CLUSTER',
+          severity: 'critical',
+          departmentName: dept?.name,
+          title: 'SLA Breach Cluster',
+          description: `High number of SLA breaches detected in ${dept?.name}. Resource reallocation recommended.`,
+          metric: count,
+          threshold: 5,
+        });
+      }
+    }
+
+    return sendSuccess(res, { alerts });
+  } catch (error) {
+    console.error('Analytics — anomalies error:', error);
+    return sendError(res, 'Failed to fetch anomalies.');
+  }
+});
+
+// ---- GET /api/analytics/officer-impact ----
+// Calculates the officer's performance scorecard.
+router.get('/officer-impact', async (req, res) => {
+  try {
+    const officerId = req.user.userId;
+
+    const interventions = await prisma.officerIntervention.findMany({
+      where: { officerId },
+      include: {
+        ticket: { select: { status: true, assignedAt: true, resolvedAt: true } }
+      }
+    });
+
+    const activeInterventions = interventions.filter(i => i.isActive).length;
+    const totalInterventions = interventions.length;
+    
+    let resolvedCount = 0;
+    let totalResolveTimeMs = 0;
+
+    for (const i of interventions) {
+      if (i.ticket.status === 'RESOLVED') {
+        resolvedCount++;
+        if (i.ticket.assignedAt && i.ticket.resolvedAt) {
+          totalResolveTimeMs += (i.ticket.resolvedAt.getTime() - i.ticket.assignedAt.getTime());
+        }
+      }
+    }
+
+    const directivesIssued = await prisma.directive.count({ where: { authorId: officerId } });
+
+    const interventionResolutionRate = totalInterventions > 0
+      ? Math.round((resolvedCount / totalInterventions) * 100) : 0;
+      
+    const avgResolutionAfterIntervention = resolvedCount > 0
+      ? parseFloat((totalResolveTimeMs / resolvedCount / (1000 * 60 * 60)).toFixed(1)) : null;
+
+    // Score formula: 40% res rate + 30% intervention vol (cap 20) + 30% directives (cap 10)
+    let score = 0;
+    score += (interventionResolutionRate * 0.4);
+    score += (Math.min(totalInterventions, 20) / 20) * 30;
+    score += (Math.min(directivesIssued, 10) / 10) * 30;
+
+    const impactScore = Math.round(score);
+
+    return sendSuccess(res, {
+      officerImpact: {
+        impactScore,
+        totalInterventions,
+        activeInterventions,
+        directivesIssued,
+        interventionResolutionRate,
+        avgResolutionAfterIntervention,
+      }
+    });
+  } catch (error) {
+    console.error('Analytics — officer impact error:', error);
+    return sendError(res, 'Failed to fetch officer impact.');
   }
 });
 

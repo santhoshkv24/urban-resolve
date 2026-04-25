@@ -13,8 +13,8 @@ const router = express.Router();
 
 const prisma = require('../config/db');
 const env = require('../config/env');
-const { encrypt } = require('../services/crypto.service');
-const { sendEmail } = require('../services/email.service');
+const { encrypt, decrypt } = require('../services/crypto.service');
+const { sendEmail, getHtmlTemplate } = require('../services/email.service');
 const { authenticate } = require('../middleware/auth');
 const { validateRegistration, validateLogin } = require('../middleware/validate');
 const { sendSuccess, sendError } = require('../utils/helpers');
@@ -54,6 +54,7 @@ router.post('/register', validateRegistration, async (req, res) => {
         name: true,
         email: true,
         role: true,
+        civicTrustScore: true,
         emailVerified: true,
         createdAt: true,
       },
@@ -107,6 +108,7 @@ router.post('/login', validateLogin, async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        civicTrustScore: user.civicTrustScore,
         emailVerified: user.emailVerified,
         departmentId: user.departmentId,
       },
@@ -122,7 +124,8 @@ router.post('/login', validateLogin, async (req, res) => {
 router.post('/send-otp', authenticate, async (req, res) => {
   try {
     const userId = req.user.userId;
-
+    console.log(`[AUTH] Generating OTP for user: ${userId} (${req.user.email})`);
+    
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -144,18 +147,29 @@ router.post('/send-otp', authenticate, async (req, res) => {
       },
     });
 
+    console.log(`[AUTH] Sending OTP email to ${req.user.email}...`);
+
     // Send OTP via email (mocked in dev)
-    await sendEmail({
+    const emailStatus = await sendEmail({
       to: req.user.email,
-      subject: 'Municipal Helpdesk — Email Verification OTP',
-      body: `Your OTP code is: ${otpCode}\n\nThis code expires in 10 minutes.`,
-      ticketId: null,
+      subject: 'Urban Resolve — Verify Your Account',
+      body: `Your OTP code is: ${otpCode}`,
+      html: getHtmlTemplate(
+        'Verify Your Account',
+        `
+        <p>Thank you for joining Urban Resolve. Please use the following code to verify your email address:</p>
+        <div class="otp-code">${otpCode}</div>
+        <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+        `
+      ),
       recipientUserId: userId,
     });
 
+    console.log(`[AUTH] OTP email status: ${emailStatus}`);
+
     return sendSuccess(res, null, 200, 'OTP sent to your email address');
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error('[AUTH] send-otp error:', error);
     return sendError(res, 'Failed to send OTP. Please try again.');
   }
 });
@@ -202,6 +216,178 @@ router.post('/verify-otp', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Verify OTP error:', error);
     return sendError(res, 'OTP verification failed. Please try again.');
+  }
+});
+
+// ---- POST /api/auth/forgot-password ----
+// Send a reset OTP to the user's email if they forgot their password.
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return sendError(res, 'Email is required.', 400);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Security: Don't reveal if email exists, just say "If account exists..."
+      return sendSuccess(res, null, 200, 'If an account exists, a reset code has been sent.');
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    // Invalidate existing OTPs
+    await prisma.oTP.updateMany({
+      where: { userId: user.id, isUsed: false },
+      data: { isUsed: true },
+    });
+
+    await prisma.oTP.create({
+      data: { userId: user.id, otpCode, expiresAt },
+    });
+
+    await sendEmail({
+      to: email,
+      subject: 'Urban Resolve — Password Reset Code',
+      body: `Your password reset code is: ${otpCode}`,
+      html: getHtmlTemplate(
+        'Reset Your Password',
+        `
+        <p>We received a request to reset your password. Use the code below to complete the process:</p>
+        <div class="otp-code">${otpCode}</div>
+        <p>This code will expire in 15 minutes. If you did not request a password reset, you can safely ignore this email.</p>
+        `
+      ),
+      recipientUserId: user.id,
+    });
+
+    return sendSuccess(res, null, 200, 'Reset code sent to your email.');
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return sendError(res, 'Failed to process request.');
+  }
+});
+
+// ---- POST /api/auth/reset-password ----
+// Verify OTP and update password.
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return sendError(res, 'Email, OTP, and new password are required.', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return sendError(res, 'Invalid request.', 400);
+
+    const otpRecord = await prisma.oTP.findFirst({
+      where: {
+        userId: user.id,
+        otpCode: otp,
+        isUsed: false,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otpRecord) {
+      return sendError(res, 'Invalid or expired reset code.', 400, 'INVALID_OTP');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      prisma.oTP.update({
+        where: { id: otpRecord.id },
+        data: { isUsed: true },
+      }),
+    ]);
+
+    return sendSuccess(res, null, 200, 'Password reset successful. You can now login.');
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return sendError(res, 'Failed to reset password.');
+  }
+});
+
+// ---- GET /api/auth/me ----
+// Returns fresh profile data for the authenticated user.
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        civicTrustScore: true,
+        emailVerified: true,
+        departmentId: true,
+        phoneEncrypted: true,
+        addressEncrypted: true,
+        department: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!user) {
+      return sendError(res, 'User not found.', 404, 'NOT_FOUND');
+    }
+
+    // Decrypt sensitive data
+    user.phone = user.phoneEncrypted ? decrypt(user.phoneEncrypted) : null;
+    user.address = user.addressEncrypted ? decrypt(user.addressEncrypted) : null;
+    delete user.phoneEncrypted;
+    delete user.addressEncrypted;
+
+    return sendSuccess(res, { user });
+  } catch (error) {
+    console.error('Get auth profile error:', error);
+    return sendError(res, 'Failed to fetch profile.');
+  }
+});
+
+// ---- PUT /api/auth/profile ----
+// Update user profile information.
+router.put('/profile', authenticate, async (req, res) => {
+  try {
+    const { name, phone, address } = req.body;
+    const userId = req.user.userId;
+
+    const data = {};
+    if (name) data.name = name;
+    if (phone) data.phoneEncrypted = encrypt(phone);
+    if (address) data.addressEncrypted = encrypt(address);
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        civicTrustScore: true,
+        emailVerified: true,
+        phoneEncrypted: true,
+        addressEncrypted: true,
+      },
+    });
+
+    // Decrypt sensitive data for return
+    updatedUser.phone = updatedUser.phoneEncrypted ? decrypt(updatedUser.phoneEncrypted) : null;
+    updatedUser.address = updatedUser.addressEncrypted ? decrypt(updatedUser.addressEncrypted) : null;
+    delete updatedUser.phoneEncrypted;
+    delete updatedUser.addressEncrypted;
+
+    return sendSuccess(res, { user: updatedUser }, 200, 'Profile updated successfully.');
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return sendError(res, 'Failed to update profile.');
   }
 });
 

@@ -20,7 +20,10 @@ const {
   notifyTicketRejected,
   notifyTicketReassigned,
 } = require('../services/email.service');
+const { buildAssignmentSlaData } = require('../services/sla.service');
 const { sendSuccess, sendError, getPagination } = require('../utils/helpers');
+
+const PUBLIC_UPVOTE_PRIORITY_THRESHOLD = 5;
 
 // All ticket routes require authentication
 router.use(authenticate);
@@ -35,7 +38,7 @@ router.post(
   handleUploadError,
   async (req, res) => {
     try {
-      const { description, latitude, longitude } = req.body;
+      const { description, latitude, longitude, visibility } = req.body;
       const citizenId = req.user.userId;
 
       // Validate required fields
@@ -45,8 +48,11 @@ router.post(
       if (!latitude || !longitude) {
         return sendError(res, 'GPS coordinates (latitude, longitude) are required.', 400, 'VALIDATION_ERROR');
       }
+      if (!visibility || !['PUBLIC', 'PRIVATE'].includes(visibility)) {
+        return sendError(res, 'Visibility must be either "PUBLIC" or "PRIVATE".', 400, 'VALIDATION_ERROR');
+      }
 
-      const imageUrl = `/uploads/${req.file.filename}`;
+      const imageUrl = req.file.path;
 
       // Create ticket with initial PENDING_AI status
       const ticket = await prisma.ticket.create({
@@ -56,6 +62,7 @@ router.post(
           imageUrl,
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
+          visibility,
           status: 'PENDING_AI',
         },
       });
@@ -91,6 +98,287 @@ router.post(
   }
 );
 
+// ---- GET /api/tickets/nearby ----
+// Find open tickets within a radius of the given coordinates.
+// Used by the citizen duplicate-report nudge before submission.
+// Uses Haversine approximation (1 degree ≈ 111 km).
+router.get('/nearby', requireRole('CITIZEN'), async (req, res) => {
+  try {
+    const { lat, lng, radiusKm = 0.5 } = req.query;
+
+    if (!lat || !lng) {
+      return sendError(res, 'Latitude and longitude are required.', 400, 'VALIDATION_ERROR');
+    }
+
+    const latF = parseFloat(lat);
+    const lngF = parseFloat(lng);
+    const radius = parseFloat(radiusKm);
+
+    // Approximate bounding box (1 deg lat ≈ 111 km, 1 deg lng ≈ 111 km * cos(lat))
+    const deltaLat = radius / 111.0;
+    const deltaLng = radius / (111.0 * Math.cos((latF * Math.PI) / 180));
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        status: { notIn: ['RESOLVED', 'REJECTED'] },
+        latitude: { gte: latF - deltaLat, lte: latF + deltaLat },
+        longitude: { gte: lngF - deltaLng, lte: lngF + deltaLng },
+        // Exclude the authenticated citizen's own tickets to avoid self-nudge
+        citizenId: { not: req.user.userId },
+      },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        description: true,
+        imageUrl: true,
+        status: true,
+        latitude: true,
+        longitude: true,
+        createdAt: true,
+        assignedDepartment: { select: { id: true, name: true } },
+        recommendedDepartment: { select: { id: true, name: true } },
+      },
+    });
+
+    // Calculate actual distance for each result
+    const withDistance = tickets
+      .map((t) => {
+        const dLat = (parseFloat(t.latitude) - latF) * (Math.PI / 180);
+        const dLng = (parseFloat(t.longitude) - lngF) * (Math.PI / 180);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((latF * Math.PI) / 180) *
+            Math.cos((parseFloat(t.latitude) * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return { ...t, distanceKm: parseFloat(distKm.toFixed(3)) };
+      })
+      .filter((t) => t.distanceKm <= radius)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return sendSuccess(res, { nearbyTickets: withDistance });
+  } catch (error) {
+    console.error('Nearby tickets error:', error);
+    return sendError(res, 'Failed to fetch nearby tickets.');
+  }
+});
+
+// ---- GET /api/tickets/community-feed ----
+// Citizen feed of public tickets with upvote metadata.
+router.get('/community-feed', requireRole('CITIZEN'), async (req, res) => {
+  try {
+    const { page, limit, departmentId } = req.query;
+
+    const where = {
+      visibility: 'PUBLIC',
+      status: { notIn: ['REJECTED'] },
+      ...(departmentId ? { assignedDepartmentId: parseInt(departmentId) } : {}),
+    };
+
+    const total = await prisma.ticket.count({ where });
+    const pagination = getPagination(page, limit, total);
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      skip: pagination.skip,
+      take: pagination.limit,
+      orderBy: [
+        { priority: 'desc' },
+        { upvoteCount: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      include: {
+        citizen: { select: { id: true, name: true } },
+        assignedDepartment: { select: { id: true, name: true } },
+        recommendedDepartment: { select: { id: true, name: true } },
+        _count: { select: { upvotes: true } },
+        upvotes: {
+          where: { citizenId: req.user.userId },
+          select: { id: true },
+        },
+      },
+    });
+
+    const feed = tickets.map((ticket) => ({
+      ...ticket,
+      hasUpvoted: ticket.upvotes.length > 0,
+      upvoteCount: ticket._count.upvotes,
+      upvotes: undefined,
+    }));
+
+    return sendSuccess(res, { feed, pagination });
+  } catch (error) {
+    console.error('Community feed error:', error);
+    return sendError(res, 'Failed to fetch community feed.');
+  }
+});
+
+// ---- POST /api/tickets/:id/upvote ----
+// Citizen confirms they are experiencing the same public issue.
+router.post('/:id/upvote', requireRole('CITIZEN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const citizenId = req.user.userId;
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        citizenId: true,
+        visibility: true,
+        status: true,
+        priority: true,
+      },
+    });
+
+    if (!ticket) {
+      return sendError(res, 'Ticket not found.', 404, 'NOT_FOUND');
+    }
+    if (ticket.visibility !== 'PUBLIC') {
+      return sendError(res, 'Only public tickets can be upvoted.', 400, 'VALIDATION_ERROR');
+    }
+    if (ticket.citizenId === citizenId) {
+      return sendError(res, 'You cannot upvote your own ticket.', 400, 'VALIDATION_ERROR');
+    }
+    if (['RESOLVED', 'REJECTED'].includes(ticket.status)) {
+      return sendError(res, 'This ticket is no longer open for upvotes.', 400, 'INVALID_STATE_TRANSITION');
+    }
+
+    const existing = await prisma.ticketUpvote.findUnique({
+      where: {
+        ticketId_citizenId: {
+          ticketId: id,
+          citizenId,
+        },
+      },
+    });
+
+    if (existing) {
+      const count = await prisma.ticketUpvote.count({ where: { ticketId: id } });
+      return sendSuccess(res, {
+        ticketId: id,
+        upvoteCount: count,
+        priority: ticket.priority,
+        hasUpvoted: true,
+      }, 200, 'Ticket already upvoted.');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.ticketUpvote.create({
+        data: {
+          ticketId: id,
+          citizenId,
+        },
+      });
+
+      const upvoteCount = await tx.ticketUpvote.count({ where: { ticketId: id } });
+
+      const shouldBumpPriority = upvoteCount >= PUBLIC_UPVOTE_PRIORITY_THRESHOLD;
+      const updated = await tx.ticket.update({
+        where: { id },
+        data: {
+          upvoteCount,
+          ...(shouldBumpPriority && ['LOW', 'MEDIUM'].includes(ticket.priority)
+            ? { priority: 'HIGH' }
+            : {}),
+        },
+        select: {
+          id: true,
+          priority: true,
+          upvoteCount: true,
+        },
+      });
+
+      return updated;
+    });
+
+    return sendSuccess(res, {
+      ticketId: result.id,
+      upvoteCount: result.upvoteCount,
+      priority: result.priority,
+      hasUpvoted: true,
+      threshold: PUBLIC_UPVOTE_PRIORITY_THRESHOLD,
+    }, 201, 'Upvote registered successfully.');
+  } catch (error) {
+    console.error('Ticket upvote error:', error);
+    return sendError(res, 'Failed to upvote ticket.');
+  }
+});
+
+// ---- DELETE /api/tickets/:id/upvote ----
+// Citizen retracts an upvote from a public ticket.
+router.delete('/:id/upvote', requireRole('CITIZEN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const citizenId = req.user.userId;
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true, priority: true, visibility: true },
+    });
+
+    if (!ticket) {
+      return sendError(res, 'Ticket not found.', 404, 'NOT_FOUND');
+    }
+    if (ticket.visibility !== 'PUBLIC') {
+      return sendError(res, 'Only public tickets support upvote actions.', 400, 'VALIDATION_ERROR');
+    }
+
+    const existing = await prisma.ticketUpvote.findUnique({
+      where: {
+        ticketId_citizenId: {
+          ticketId: id,
+          citizenId,
+        },
+      },
+    });
+
+    if (!existing) {
+      const count = await prisma.ticketUpvote.count({ where: { ticketId: id } });
+      return sendSuccess(res, {
+        ticketId: id,
+        upvoteCount: count,
+        priority: ticket.priority,
+        hasUpvoted: false,
+      }, 200, 'Upvote was not present.');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.ticketUpvote.delete({ where: { id: existing.id } });
+      const upvoteCount = await tx.ticketUpvote.count({ where: { ticketId: id } });
+
+      const updated = await tx.ticket.update({
+        where: { id },
+        data: {
+          upvoteCount,
+          ...(upvoteCount < PUBLIC_UPVOTE_PRIORITY_THRESHOLD && ticket.priority === 'HIGH'
+            ? { priority: 'MEDIUM' }
+            : {}),
+        },
+        select: {
+          id: true,
+          priority: true,
+          upvoteCount: true,
+        },
+      });
+
+      return updated;
+    });
+
+    return sendSuccess(res, {
+      ticketId: result.id,
+      upvoteCount: result.upvoteCount,
+      priority: result.priority,
+      hasUpvoted: false,
+      threshold: PUBLIC_UPVOTE_PRIORITY_THRESHOLD,
+    }, 200, 'Upvote removed successfully.');
+  } catch (error) {
+    console.error('Remove upvote error:', error);
+    return sendError(res, 'Failed to remove upvote.');
+  }
+});
+
 // ---- GET /api/tickets ----
 // List tickets with role-based filtering:
 // - CITIZEN: own tickets only
@@ -99,7 +387,7 @@ router.post(
 // - OFFICER: all tickets (read-only)
 router.get('/', async (req, res) => {
   try {
-    const { status, page, limit, departmentId } = req.query;
+    const { status, page, limit, departmentId, priority } = req.query;
     const where = {};
 
     // Apply role-based filtering
@@ -129,24 +417,51 @@ router.get('/', async (req, res) => {
     // Apply optional filters
     if (status) where.status = status;
     if (departmentId) where.assignedDepartmentId = parseInt(departmentId);
+    if (priority) where.priority = priority;
 
     const total = await prisma.ticket.count({ where });
     const pagination = getPagination(page, limit, total);
+
+    const include = {
+      citizen: { select: { id: true, name: true, email: true } },
+      recommendedDepartment: { select: { id: true, name: true } },
+      assignedDepartment: { select: { id: true, name: true } },
+      assignedWorker: { select: { id: true, name: true } },
+      interventions: {
+        where: { isActive: true },
+        select: { id: true, note: true, priority: true, createdAt: true, officer: { select: { id: true, name: true } } },
+      },
+      _count: {
+        select: { upvotes: true },
+      },
+    };
+
+    if (req.user.role === 'CITIZEN') {
+      include.upvotes = {
+        where: { citizenId: req.user.userId },
+        select: { id: true },
+      };
+    }
 
     const tickets = await prisma.ticket.findMany({
       where,
       skip: pagination.skip,
       take: pagination.limit,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        citizen: { select: { id: true, name: true, email: true } },
-        recommendedDepartment: { select: { id: true, name: true } },
-        assignedDepartment: { select: { id: true, name: true } },
-        assignedWorker: { select: { id: true, name: true } },
-      },
+      orderBy:
+        req.user.role === 'ADMIN' || req.user.role === 'OFFICER'
+          ? [{ priority: 'desc' }, { createdAt: 'desc' }]
+          : [{ createdAt: 'desc' }],
+      include,
     });
 
-    return sendSuccess(res, { tickets, pagination });
+    const enriched = tickets.map((ticket) => ({
+      ...ticket,
+      upvoteCount: ticket._count.upvotes,
+      hasUpvoted: Array.isArray(ticket.upvotes) ? ticket.upvotes.length > 0 : false,
+      upvotes: undefined,
+    }));
+
+    return sendSuccess(res, { tickets: enriched, pagination });
   } catch (error) {
     console.error('List tickets error:', error);
     return sendError(res, 'Failed to fetch tickets.');
@@ -167,8 +482,19 @@ router.get('/:id', async (req, res) => {
         assignedDepartment: { select: { id: true, name: true } },
         assignedWorker: { select: { id: true, name: true } },
         notifications: {
-          select: { id: true, subject: true, status: true, sentAt: true },
+          select: { id: true, subject: true, status: true, isRead: true, sentAt: true, deepLink: true },
           orderBy: { sentAt: 'desc' },
+        },
+        interventions: {
+          where: { isActive: true },
+          include: { officer: { select: { id: true, name: true } } },
+        },
+        _count: {
+          select: { upvotes: true },
+        },
+        upvotes: {
+          where: { citizenId: req.user.userId },
+          select: { id: true },
         },
       },
     });
@@ -192,7 +518,14 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    return sendSuccess(res, { ticket });
+    const payload = {
+      ...ticket,
+      upvoteCount: ticket._count.upvotes,
+      hasUpvoted: ticket.upvotes.length > 0,
+      upvotes: undefined,
+    };
+
+    return sendSuccess(res, { ticket: payload });
   } catch (error) {
     console.error('Get ticket error:', error);
     return sendError(res, 'Failed to fetch ticket.');
@@ -237,6 +570,8 @@ router.put('/:id/assign', requireRole('ADMIN'), async (req, res) => {
 
     // Determine if admin accepted AI recommendation
     const aiAccepted = ticket.recommendedDepartmentId === parseInt(departmentId);
+    const assignedAt = new Date();
+    const slaData = await buildAssignmentSlaData(parseInt(departmentId), assignedAt);
 
     const updatedTicket = await prisma.ticket.update({
       where: { id },
@@ -245,7 +580,8 @@ router.put('/:id/assign', requireRole('ADMIN'), async (req, res) => {
         assignedDepartmentId: parseInt(departmentId),
         assignedWorkerId: parseInt(workerId),
         aiRecommendationAccepted: aiAccepted,
-        assignedAt: new Date(),
+        ...slaData,
+        reopenReason: null,
       },
       include: {
         citizen: { select: { id: true, name: true, email: true } },
@@ -301,25 +637,34 @@ router.put(
         return sendError(res, 'A resolution image (\"After\" photo) is required.', 400, 'VALIDATION_ERROR');
       }
 
-      const resolutionImageUrl = `/uploads/${req.file.filename}`;
+      const resolutionImageUrl = req.file.path;
 
-      const updatedTicket = await prisma.ticket.update({
-        where: { id },
-        data: {
-          status: 'RESOLVED',
-          resolutionImageUrl,
-          resolutionNotes: resolutionNotes || null,
-          resolvedAt: new Date(),
-        },
-        include: {
-          citizen: { select: { id: true, name: true, email: true } },
-        },
-      });
+      const [updatedTicket] = await prisma.$transaction([
+        prisma.ticket.update({
+          where: { id },
+          data: {
+            status: 'RESOLVED',
+            resolutionImageUrl,
+            resolutionNotes: resolutionNotes || null,
+            resolvedAt: new Date(),
+            slaPausedAt: null,
+          },
+          include: {
+            citizen: { select: { id: true, name: true, email: true } },
+          },
+        }),
+        prisma.user.update({
+          where: { id: ticket.citizenId },
+          data: {
+            civicTrustScore: { increment: 10 },
+          },
+        }),
+      ]);
 
       // Notify citizen
       await notifyTicketResolved(updatedTicket, updatedTicket.citizen.email, updatedTicket.citizen.id);
 
-      return sendSuccess(res, { ticket: updatedTicket }, 200, 'Ticket resolved successfully');
+      return sendSuccess(res, { ticket: updatedTicket, trustDelta: 10 }, 200, 'Ticket resolved successfully');
     } catch (error) {
       console.error('Resolve ticket error:', error);
       return sendError(res, 'Failed to resolve ticket.');
@@ -415,19 +760,29 @@ router.put('/:id/resolve-escalation', requireRole('ADMIN'), async (req, res) => 
 
     if (action === 'reject') {
       // Mark as REJECTED
-      const updatedTicket = await prisma.ticket.update({
-        where: { id },
-        data: {
-          status: 'REJECTED',
-          adminResolutionNotes: adminResolutionNotes || null,
-          resolvedAt: new Date(),
-        },
-      });
+      const [updatedTicket] = await prisma.$transaction([
+        prisma.ticket.update({
+          where: { id },
+          data: {
+            status: 'REJECTED',
+            adminResolutionNotes: adminResolutionNotes || null,
+            resolvedAt: new Date(),
+            isFalseReportConfirmed: true,
+            slaPausedAt: null,
+          },
+        }),
+        prisma.user.update({
+          where: { id: ticket.citizen.id },
+          data: {
+            civicTrustScore: { decrement: 15 },
+          },
+        }),
+      ]);
 
       // Notify citizen
       await notifyTicketRejected(updatedTicket, ticket.citizen.email, ticket.citizen.id);
 
-      return sendSuccess(res, { ticket: updatedTicket }, 200, 'Ticket rejected and closed.');
+      return sendSuccess(res, { ticket: updatedTicket, trustDelta: -15 }, 200, 'Ticket rejected and closed.');
     }
 
     if (action === 'reassign') {
@@ -444,6 +799,9 @@ router.put('/:id/resolve-escalation', requireRole('ADMIN'), async (req, res) => 
         return sendError(res, 'Worker does not belong to the specified department.', 400, 'WORKER_DEPT_MISMATCH');
       }
 
+      const assignedAt = new Date();
+      const slaData = await buildAssignmentSlaData(parseInt(departmentId), assignedAt);
+
       const updatedTicket = await prisma.ticket.update({
         where: { id },
         data: {
@@ -451,8 +809,10 @@ router.put('/:id/resolve-escalation', requireRole('ADMIN'), async (req, res) => 
           assignedDepartmentId: parseInt(departmentId),
           assignedWorkerId: parseInt(workerId),
           adminResolutionNotes: adminResolutionNotes || null,
-          assignedAt: new Date(),
+          ...slaData,
           escalationReason: null, // Clear escalation since it's re-assigned
+          isFalseReportConfirmed: false,
+          reopenReason: null,
         },
       });
 
@@ -464,6 +824,64 @@ router.put('/:id/resolve-escalation', requireRole('ADMIN'), async (req, res) => 
   } catch (error) {
     console.error('Resolve escalation error:', error);
     return sendError(res, 'Failed to resolve escalation.');
+  }
+});
+
+// ---- PUT /api/tickets/:id/reopen ----
+// Citizen reopens a resolved ticket for admin review.
+router.put('/:id/reopen', requireRole('CITIZEN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { reopenReason } = req.body;
+
+    if (!reopenReason || reopenReason.trim() === '') {
+      return sendError(res, 'A reopen reason is required.', 400, 'VALIDATION_ERROR');
+    }
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        citizen: { select: { id: true, email: true } },
+      },
+    });
+
+    if (!ticket) {
+      return sendError(res, 'Ticket not found.', 404, 'NOT_FOUND');
+    }
+    if (ticket.citizenId !== req.user.userId) {
+      return sendError(res, 'Access denied.', 403, 'FORBIDDEN');
+    }
+    if (ticket.status !== 'RESOLVED') {
+      return sendError(res, 'Only resolved tickets can be reopened.', 400, 'INVALID_STATE_TRANSITION');
+    }
+
+    const updatedTicket = await prisma.ticket.update({
+      where: { id },
+      data: {
+        status: 'ESCALATED_TO_ADMIN',
+        escalationReason: reopenReason.trim(),
+        reopenReason: reopenReason.trim(),
+        assignedWorkerId: null,
+        resolvedAt: null,
+        adminResolutionNotes: null,
+        dueAt: null,
+        slaPausedAt: null,
+      },
+    });
+
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, email: true },
+    });
+
+    for (const admin of admins) {
+      await notifyTicketEscalated(updatedTicket, admin.email, admin.id);
+    }
+
+    return sendSuccess(res, { ticket: updatedTicket }, 200, 'Ticket reopened and escalated to admin review.');
+  } catch (error) {
+    console.error('Reopen ticket error:', error);
+    return sendError(res, 'Failed to reopen ticket.');
   }
 });
 

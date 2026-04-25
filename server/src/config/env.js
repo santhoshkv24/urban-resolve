@@ -20,14 +20,15 @@ const env = {
 
   // AI Service
   AI_SERVICE_TYPE: process.env.AI_SERVICE_TYPE || 'mock',
-  GOOGLE_CLOUD_API_KEY: process.env.GOOGLE_CLOUD_API_KEY || '',
+  GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',
+  GCP_SERVICE_ACCOUNT_JSON: process.env.GCP_SERVICE_ACCOUNT_JSON || null,
 
   // Email
   SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
   SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
   SMTP_USER: process.env.SMTP_USER || '',
   SMTP_PASS: process.env.SMTP_PASS || '',
-  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@municipal-helpdesk.com',
+  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@urban-resolve.gov',
   MOCK_EMAIL: process.env.MOCK_EMAIL === 'true',
 
   // Frontend

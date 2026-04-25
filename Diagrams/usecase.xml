@@ -1,0 +1,115 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="municipal_helpdesk_uc" name="Use Case Diagram">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <mxCell id="boundary" value="Municipal Helpdesk System" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="40" width="360" height="760" as="geometry" />
+        </mxCell>
+
+        <mxCell id="actor_citizen" value="Citizen" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="90" y="160" width="40" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="actor_admin" value="Admin" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="90" y="440" width="40" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="actor_officer" value="Officer" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="90" y="660" width="40" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="actor_ai" value="«System»&#10;AI Service" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="690" y="120" width="40" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="actor_worker" value="Dept Worker" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="690" y="340" width="40" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_auth" value="Register / Login" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="50" width="140" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="uc_create" value="Create Ticket &amp; Upload Image" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="130" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_track" value="Track Ticket Status" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="210" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_classify" value="Classify Image &amp;&#10;Recommend Dept" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="280" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_master" value="Manage Master Data&#10;(Users/Depts)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="370" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_assign" value="Review &amp; Assign&#10;Ticket" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="450" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="uc_escalation" value="Handle Escalated&#10;Tickets" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="530" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_resolve" value="Resolve Ticket &amp;&#10;Upload Proof" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="610" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc_analytics" value="View Analytics&#10;Dashboard" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="110" y="690" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge1" edge="1" parent="1" source="actor_citizen" target="uc_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge2" edge="1" parent="1" source="actor_citizen" target="uc_create">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge3" edge="1" parent="1" source="actor_citizen" target="uc_track">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge4" edge="1" parent="1" source="actor_ai" target="uc_classify">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge5" edge="1" parent="1" source="actor_admin" target="uc_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge6" edge="1" parent="1" source="actor_admin" target="uc_master">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge7" edge="1" parent="1" source="actor_admin" target="uc_assign">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge8" edge="1" parent="1" source="actor_admin" target="uc_escalation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge9" edge="1" parent="1" source="actor_worker" target="uc_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge10" edge="1" parent="1" source="actor_worker" target="uc_resolve">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge11" edge="1" parent="1" source="actor_worker" target="uc_escalation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge12" edge="1" parent="1" source="actor_officer" target="uc_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge13" edge="1" parent="1" source="actor_officer" target="uc_analytics">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

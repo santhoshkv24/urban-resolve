@@ -16,11 +16,16 @@ const authRoutes = require('./routes/auth.routes');
 const ticketRoutes = require('./routes/ticket.routes');
 const adminRoutes = require('./routes/admin.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const directiveRoutes = require('./routes/directive.routes');
+const officerRoutes = require('./routes/officer.routes');
 
 const app = express();
 
 // ---- Security Middleware ----
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // ---- CORS Configuration ----
 app.use(cors({
@@ -57,6 +62,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/directives', directiveRoutes);
+app.use('/api/officer', officerRoutes);
 
 // ---- 404 Handler ----
 app.use((req, res) => {

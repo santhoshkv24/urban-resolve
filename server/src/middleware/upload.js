@@ -8,14 +8,25 @@ const path = require('path');
 const { sendError } = require('../utils/helpers');
 
 // Storage configuration — saves files to /uploads with unique names
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads'));
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+if (!process.env.CLOUDINARY_URL) {
+  console.error('\n❌ CRITICAL ERROR: CLOUDINARY_URL is missing in .env');
+  console.error('   Cloudinary is required for image uploads. Please add it to continue.\n');
+  process.exit(1);
+}
+
+// Production & Local: Always use Cloudinary
+storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'urban-resolve',
+    allowed_formats: ['jpg', 'png', 'jpeg'],
+    public_id: (req, file) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      return `${file.fieldname}-${uniqueSuffix}`;
+    },
   },
 });
 

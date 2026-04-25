@@ -440,6 +440,26 @@ server/
 
 ---
 
+#### FR-09A: Citizen Ticket Reopen (Post-Resolution)
+
+| Field              | Detail                                                                                                    |
+| :----------------- | :-------------------------------------------------------------------------------------------------------- |
+| **ID**             | FR-09A                                                                                                    |
+| **Priority**       | High                                                                                                      |
+| **Actor**          | Citizen                                                                                                   |
+| **Endpoint**       | `PUT /api/tickets/:id/reopen`                                                                             |
+| **Description**    | Citizen can reopen a ticket after worker resolution when the issue is still unresolved or incorrectly handled. |
+
+**Acceptance Criteria:**
+1. Citizen can reopen only their **own** ticket.
+2. Reopen action is allowed only when current ticket status is **`RESOLVED`**.
+3. Citizen must provide mandatory **reopen reason**.
+4. Ticket status transitions to **`ESCALATED_TO_ADMIN`** for re-review.
+5. Admin sees reopened tickets in escalation handling flow (reject or re-assign).
+6. Reopen reason is persisted and visible to Admin in escalation context.
+
+---
+
 #### FR-10: Department Management (Master Data)
 
 | Field              | Detail                                                                     |
@@ -495,6 +515,7 @@ server/
 | `PENDING_AI` → `PENDING_ADMIN` | —         | *(No notification — internal transition)*         |
 | `PENDING_ADMIN` → `ASSIGNED`  | Citizen   | "Your ticket #{{id}} has been assigned"            |
 | `ASSIGNED` → `RESOLVED`       | Citizen   | "Your ticket #{{id}} has been resolved"            |
+| `RESOLVED` → `ESCALATED`      | Admin     | "Ticket #{{id}} reopened by citizen — review required" |
 | `ASSIGNED` → `ESCALATED`      | Admin     | "Ticket #{{id}} escalated — review required"       |
 | `ESCALATED` → `REJECTED`      | Citizen   | "Your ticket #{{id}} has been closed"              |
 | `ESCALATED` → `ASSIGNED`      | Worker    | "Ticket #{{id}} has been re-assigned to you"       |
@@ -546,6 +567,7 @@ stateDiagram-v2
     PENDING_ADMIN --> ASSIGNED : Admin assigns to Worker
     ASSIGNED --> RESOLVED : Worker uploads proof & resolves
     ASSIGNED --> ESCALATED_TO_ADMIN : Worker flags as false report
+    RESOLVED --> ESCALATED_TO_ADMIN : Citizen reopens unresolved issue
     ESCALATED_TO_ADMIN --> REJECTED : Admin confirms false report
     ESCALATED_TO_ADMIN --> ASSIGNED : Admin re-assigns ticket
     RESOLVED --> [*]
@@ -562,6 +584,7 @@ stateDiagram-v2
 | `ASSIGNED`            | `ESCALATED_TO_ADMIN` | Worker       | False report flagged with reasoning |
 | `ESCALATED_TO_ADMIN`  | `REJECTED`           | Admin        | Confirms false / invalid report     |
 | `ESCALATED_TO_ADMIN`  | `ASSIGNED`           | Admin        | Re-assigns to new worker/dept       |
+| `RESOLVED`            | `ESCALATED_TO_ADMIN` | Citizen      | Reopen request with reasoning       |
 
 > [!IMPORTANT]
 > The backend **must enforce** valid state transitions. Any API call attempting an invalid transition must return `400 Bad Request` with a descriptive error.
@@ -795,6 +818,7 @@ All APIs follow **RESTful** conventions:
 | GET    | `/api/tickets/:id`                         | All (authorized)   | Get ticket detail                      |
 | PUT    | `/api/tickets/:id/assign`                  | Admin              | Assign ticket to worker                |
 | PUT    | `/api/tickets/:id/resolve`                 | Dept Worker        | Resolve ticket with proof              |
+| PUT    | `/api/tickets/:id/reopen`                  | Citizen            | Reopen resolved ticket for admin review |
 | PUT    | `/api/tickets/:id/flag-false`              | Dept Worker        | Flag ticket as false report            |
 | PUT    | `/api/tickets/:id/resolve-escalation`      | Admin              | Handle escalated ticket                |
 | GET    | `/api/admin/departments`                   | Admin              | List departments                       |
