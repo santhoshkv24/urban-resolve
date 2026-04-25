@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment
+.env
+client/.env
+server/.env
+*.local
+
+# System/Tooling
+.DS_Store
+.vscode/
+.idea/
+.agents/
+.gemini/
+.antigravity/
+
+# Specific hidden directories
+.github/java-upgrade/
+
+# Build outputs
+dist/
+client/dist/
+server/dist/
+uploads/
+server/uploads/

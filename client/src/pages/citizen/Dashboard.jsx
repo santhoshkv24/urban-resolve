@@ -5,9 +5,11 @@ import TicketCard from '../../components/ui/TicketCard';
 import { PageLoader } from '../../components/ui/Spinner';
 import {
   FileText, CheckCircle2, Clock, Award,
-  ThumbsUp, Users, Filter, SortDesc, Plus, MapPin, Sparkles, TrendingUp
+  ThumbsUp, Users, Filter, SortDesc, Plus, MapPin, Sparkles, TrendingUp, ArrowUpRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getImageUrl } from '../../utils/imageUrl';
+import { useToast } from '../../components/ui/Toast';
 
 /* ── KPI Stat Card ── */
 const StatCard = ({ icon: Icon, label, value, color, bgColor, delay = 0 }) => (
@@ -37,69 +39,83 @@ const StatCard = ({ icon: Icon, label, value, color, bgColor, delay = 0 }) => (
 
 /* ── Community Feed Card ── */
 const CommunityCard = ({ ticket, onUpvote, upvoting }) => {
-  const departmentName = ticket.assignedDepartment?.name || ticket.recommendedDepartment?.name || 'Municipal Service';
+  const departmentName = ticket.assignedDepartment?.name || ticket.recommendedDepartment?.name || 'UrbanResolve Service';
+  const hasImage = !!ticket.imageUrl;
+  
   return (
-    <div className="group relative glass-card rounded-3xl border border-outline-variant/30 p-5 bg-white/60 hover:bg-white/90 transition-all duration-300 shadow-ambient-sm hover:shadow-ambient-lg overflow-hidden">
-      <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-        <TrendingUp className="w-12 h-12 text-primary" />
-      </div>
-
-      <div className="flex items-start gap-4 mb-4">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-          <Users className="w-5 h-5 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10 uppercase tracking-wider">Public Concern</span>
-            <span className="text-[10px] font-mono text-on-surface-variant/40">#{ticket.id}</span>
+    <div className="group relative glass-card rounded-3xl border border-outline-variant/30 bg-white/60 hover:bg-white/90 transition-all duration-300 shadow-ambient-sm hover:shadow-ambient-lg overflow-hidden flex flex-col">
+      {/* Clickable Header & Image Area */}
+      <Link to={`/citizen/tickets/${ticket.id}`} className="block relative h-40 overflow-hidden">
+        {hasImage ? (
+          <img 
+            src={getImageUrl(ticket.imageUrl)} 
+            alt={ticket.description} 
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+          />
+        ) : (
+          <div className="w-full h-full bg-surface-container-low flex items-center justify-center text-on-surface-variant/20">
+            <FileText className="w-12 h-12" />
           </div>
-          <h3 className="font-display font-bold text-on-surface text-[15px] leading-tight line-clamp-1 group-hover:text-primary transition-colors">
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+        
+        <div className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+          <ArrowUpRight className="w-4 h-4" />
+        </div>
+
+        <div className="absolute bottom-4 left-4 right-4">
+          <div className="flex items-center gap-2 mb-1">
+             <span className="text-[10px] font-bold text-white bg-primary/80 px-2 py-0.5 rounded-lg backdrop-blur-sm uppercase tracking-wider">Public Concern</span>
+          </div>
+          <h3 className="font-display font-bold text-white text-base leading-tight line-clamp-1">
             {ticket.description || 'Civic issue report'}
           </h3>
         </div>
-      </div>
+      </Link>
 
-      <div className="flex items-center gap-4 text-xs text-on-surface-variant/70 mb-5">
-        <div className="flex items-center gap-1.5">
-          <MapPin className="w-3.5 h-3.5" />
-          <span className="truncate max-w-[120px]">City Ward {Math.floor(ticket.latitude * 10) % 50}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="truncate">{departmentName}</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 pt-4 border-t border-outline-variant/10">
-        <div className="flex -space-x-2">
-          {[...Array(Math.min(3, ticket.upvoteCount || 1))].map((_, i) => (
-            <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500">
-              {String.fromCharCode(65 + i)}
-            </div>
-          ))}
-          {ticket.upvoteCount > 3 && (
-            <div className="w-6 h-6 rounded-full border-2 border-white bg-primary text-white flex items-center justify-center text-[8px] font-bold">
-              +{ticket.upvoteCount - 3}
-            </div>
-          )}
-          <span className="ml-4 text-[10px] font-bold text-on-surface-variant/60 flex items-center pl-2">
-            Affected Citizens
-          </span>
+      <div className="p-5 flex-1 flex flex-col">
+        <div className="flex items-center gap-4 text-xs text-on-surface-variant/70 mb-5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <MapPin className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{ticket.location || `City Ward ${Math.floor(ticket.latitude * 10) % 50}`}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="truncate">{departmentName}</span>
+          </div>
         </div>
 
-        <button
-          onClick={() => onUpvote(ticket)}
-          disabled={upvoting}
-          className={[
-            'h-9 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-2',
-            ticket.hasUpvoted
-              ? 'bg-primary text-white shadow-glow-blue/40 scale-105'
-              : 'bg-surface-container hover:bg-primary/10 hover:text-primary text-on-surface-variant hover:border-primary/20 border border-transparent',
-          ].join(' ')}
-        >
-          <ThumbsUp className={`w-3.5 h-3.5 ${ticket.hasUpvoted ? 'fill-current' : ''}`} />
-          {upvoting ? '...' : ticket.hasUpvoted ? 'Confirmed' : 'Impact?'}
-        </button>
+        <div className="flex items-center justify-between gap-3 pt-4 border-t border-outline-variant/10 mt-auto">
+          <div className="flex -space-x-2">
+            {[...Array(Math.min(3, ticket.upvoteCount || 1))].map((_, i) => (
+              <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
+                {String.fromCharCode(65 + i)}
+              </div>
+            ))}
+            {ticket.upvoteCount > 3 && (
+              <div className="w-6 h-6 rounded-full border-2 border-white bg-primary text-white flex items-center justify-center text-[8px] font-bold">
+                +{ticket.upvoteCount - 3}
+              </div>
+            )}
+            <span className="ml-4 text-[10px] font-bold text-on-surface-variant/60 flex items-center pl-2">
+              Impact Reported
+            </span>
+          </div>
+
+          <button
+            onClick={() => onUpvote(ticket)}
+            disabled={upvoting}
+            className={[
+              'h-9 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-2',
+              ticket.hasUpvoted
+                ? 'bg-primary text-white shadow-glow-blue/40 scale-105'
+                : 'bg-surface-container hover:bg-primary/10 hover:text-primary text-on-surface-variant hover:border-primary/20 border border-transparent',
+            ].join(' ')}
+          >
+            <ThumbsUp className={`w-3.5 h-3.5 ${ticket.hasUpvoted ? 'fill-current' : ''}`} />
+            {upvoting ? '...' : ticket.hasUpvoted ? 'Confirmed' : 'Impact?'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -107,6 +123,7 @@ const CommunityCard = ({ ticket, onUpvote, upvoting }) => {
 
 const CitizenDashboard = () => {
   const { user, refreshUser } = useAuth();
+  const toast = useToast();
   const [tickets, setTickets] = useState([]);
   const [communityFeed, setCommunityFeed] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,12 +159,15 @@ const CitizenDashboard = () => {
     try {
       if (ticket.hasUpvoted) {
         await apiClient.delete(`/tickets/${ticket.id}/upvote`);
+        toast.success('Your impact report has been removed.');
       } else {
         await apiClient.post(`/tickets/${ticket.id}/upvote`);
+        toast.success('Thank you for confirming the impact. Your report adds to the priority!');
       }
       await fetchCommunityFeed();
     } catch (err) {
       console.error('Upvote error:', err);
+      toast.error('Failed to update impact status.');
     } finally {
       setUpvoteTicketId(null);
     }
@@ -176,7 +196,7 @@ const CitizenDashboard = () => {
               Hello, {user?.name?.split(' ')[0]}
             </h1>
             <p className="text-slate-200 text-lg leading-relaxed mb-0">
-              You have <span className="text-white font-bold">{pendingCount} active reports</span> being processed by municipal departments. Your civic trust score is in the <span className="text-secondary font-bold">{user?.civicTrustScore > 50 ? 'top 5%' : 'healthy range'}</span>.
+              You have <span className="text-white font-bold">{pendingCount} active reports</span> being processed by UrbanResolve departments. Your civic trust score is in the <span className="text-secondary font-bold">{user?.civicTrustScore > 50 ? 'top 5%' : 'healthy range'}</span>.
             </p>
           </div>
           <Link

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, AlertTriangle, FileText, ArrowRight } from 'lucide-react';
+import { Search, Filter, AlertTriangle, FileText, ArrowRight, ShieldAlert } from 'lucide-react';
 import apiClient from '../../api/client';
 import Button from '../../components/ui/Button';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -98,8 +98,13 @@ const AdminTickets = () => {
                     <td className="px-6 py-4 text-xs font-mono font-bold text-on-surface-variant/70 whitespace-nowrap">
                       #{ticket.id}
                     </td>
-                    <td className="px-6 py-4 font-semibold text-on-surface text-sm max-w-[200px] truncate" title={ticket.description}>
-                      {ticket.description || 'Unspecified Issue'}
+                    <td className="px-6 py-4 font-semibold text-on-surface text-sm max-w-[200px]" title={ticket.description}>
+                      <div className="flex items-center gap-2">
+                        {ticket.interventions?.length > 0 && (
+                          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" title="Officer Intervention Active" />
+                        )}
+                        <span className="truncate">{ticket.description || 'Unspecified Issue'}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-xs font-medium text-on-surface-variant hidden md:table-cell max-w-[150px] truncate" title={ticket.location}>
                       {ticket.location || `${ticket.latitude}, ${ticket.longitude}`}

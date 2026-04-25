@@ -23,11 +23,11 @@ const ReadOnlyMap = ({ lat, lng, height = "200px" }) => {
       <MapContainer 
         center={position} 
         zoom={15} 
-        scrollWheelZoom={false} 
-        zoomControl={false}
-        dragging={false}
-        doubleClickZoom={false}
-        touchZoom={false}
+        scrollWheelZoom={true} 
+        zoomControl={true}
+        dragging={true}
+        doubleClickZoom={true}
+        touchZoom={true}
         className="w-full h-full z-0"
       >
         <TileLayer

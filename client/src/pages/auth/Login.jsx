@@ -68,11 +68,9 @@ const Login = () => {
         <div className="relative max-w-sm w-full mx-auto">
           {/* Logo mark */}
           <div className="flex items-center gap-2.5 mb-10">
-            <div className="w-10 h-10 rounded-xl bg-gradient-civic flex items-center justify-center shadow-glow-blue/30">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
+            <img src="/logo.png" alt="Urban Resolve" className="h-10 w-auto" />
             <span className="font-display font-bold text-on-surface text-base tracking-tight">
-              Municipal<span className="text-secondary">Desk</span>
+              Urban<span className="text-secondary">Resolve</span>
             </span>
           </div>
 
@@ -201,20 +199,6 @@ const Login = () => {
           <p className="text-slate-300 text-lg leading-relaxed max-w-md mb-10">
             Track your reports, receive real-time resolution updates, and see the direct impact you're making on your neighborhood.
           </p>
-
-          {/* Stats row */}
-          <div className="flex gap-8">
-            {[
-              { value: '48h', label: 'Avg. Resolution' },
-              { value: '94%', label: 'SLA Compliance' },
-              { value: '12K+', label: 'Issues Resolved' },
-            ].map(({ value, label }) => (
-              <div key={label}>
-                <p className="text-2xl font-display font-bold text-white">{value}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

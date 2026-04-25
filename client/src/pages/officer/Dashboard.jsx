@@ -70,8 +70,8 @@ const DirectiveForm = ({ onSuccess }) => {
 
   if (!open) {
     return (
-      <Button onClick={() => setOpen(true)} variant="civic" size="md" leftIcon={Plus}>
-        Post Directive
+      <Button onClick={() => setOpen(true)} variant="civic" size="md" leftIcon={Plus} className="w-full">
+        Post New Directive
       </Button>
     );
   }
@@ -148,6 +148,42 @@ const DirectiveForm = ({ onSuccess }) => {
   );
 };
 
+const ActiveDirectives = ({ directive, onDeactivate, loading }) => {
+  if (loading) return <div className="animate-pulse h-20 bg-surface-container-low rounded-2xl" />;
+  if (!directive) return null;
+
+  const priorityStyles = {
+    critical: 'bg-red-50 border-red-200 text-red-700',
+    urgent: 'bg-amber-50 border-amber-200 text-amber-700',
+    normal: 'bg-sky-50 border-sky-200 text-sky-700',
+  };
+
+  return (
+    <div className={`p-4 rounded-2xl border ${priorityStyles[directive.priority || 'normal']} shadow-sm animate-in fade-in slide-in-from-top-2`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/60 border border-current/20">
+              Active Directive ({directive.priority})
+            </span>
+            <span className="text-[10px] font-bold opacity-70">
+              Posted {new Date(directive.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <p className="text-sm font-bold leading-relaxed">{directive.message}</p>
+        </div>
+        <button
+          onClick={() => onDeactivate(directive.id)}
+          className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"
+          title="End Directive"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const DepartmentSlaRow = ({ row, draftHours, onChangeHours, onSaveHours, savingId, readOnly }) => {
   const loadClass =
     row.ticketsPerWorker != null && row.ticketsPerWorker >= 6
@@ -207,6 +243,8 @@ const OfficerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeInterventionCount, setActiveInterventionCount] = useState(0);
 
+  const [activeDirective, setActiveDirective] = useState(null);
+  const [directiveLoading, setDirectiveLoading] = useState(true);
   const [emergencyState, setEmergencyState] = useState(null);
   const [emergencySubmitting, setEmergencySubmitting] = useState(false);
   const [emergencyForm, setEmergencyForm] = useState({
@@ -271,6 +309,18 @@ const OfficerDashboard = () => {
     }
   }, []);
 
+  const fetchActiveDirective = useCallback(async () => {
+    setDirectiveLoading(true);
+    try {
+      const res = await apiClient.get('/directives/active');
+      setActiveDirective(res.data.data.directive || null);
+    } catch {
+      setActiveDirective(null);
+    } finally {
+      setDirectiveLoading(false);
+    }
+  }, []);
+
   const fetchPolicies = useCallback(async () => {
     setPoliciesLoading(true);
     try {
@@ -309,10 +359,11 @@ const OfficerDashboard = () => {
       fetchAnomalies(),
       fetchInterventionCount(),
       fetchEmergencyState(),
+      fetchActiveDirective(),
       fetchPolicies(),
       fetchWorkforce(),
     ]);
-  }, [fetchAnalytics, fetchAnomalies, fetchInterventionCount, fetchEmergencyState, fetchPolicies, fetchWorkforce]);
+  }, [fetchAnalytics, fetchAnomalies, fetchInterventionCount, fetchEmergencyState, fetchActiveDirective, fetchPolicies, fetchWorkforce]);
 
   useEffect(() => {
     refreshAll();
@@ -365,6 +416,15 @@ const OfficerDashboard = () => {
       setEmergencyMessage(err.response?.data?.error?.message || 'Failed to deactivate emergency state.');
     } finally {
       setEmergencySubmitting(false);
+    }
+  };
+
+  const handleDeactivateDirective = async (id) => {
+    try {
+      await apiClient.put(`/directives/${id}/deactivate`);
+      fetchActiveDirective();
+    } catch (err) {
+      console.error('Deactivate directive error:', err);
     }
   };
 
@@ -559,10 +619,22 @@ const OfficerDashboard = () => {
               <Megaphone className="w-5 h-5 text-primary" />
               <h2 className="font-bold text-on-surface text-base font-display">Executive Directive</h2>
             </div>
-            <p className="text-xs text-on-surface-variant font-medium">
-              Post a strategic directive that appears across admin and worker dashboards.
-            </p>
-            <DirectiveForm onSuccess={() => {}} />
+            
+            <ActiveDirectives 
+              directive={activeDirective} 
+              onDeactivate={handleDeactivateDirective}
+              loading={directiveLoading}
+            />
+
+            {!activeDirective && !directiveLoading && (
+              <p className="text-xs text-on-surface-variant font-medium">
+                Post a strategic directive that appears across admin and worker dashboards.
+              </p>
+            )}
+            
+            {!activeDirective && !directiveLoading && (
+              <DirectiveForm onSuccess={fetchActiveDirective} />
+            )}
           </div>
         </div>
       </div>

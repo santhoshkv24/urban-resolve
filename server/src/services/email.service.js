@@ -281,6 +281,25 @@ const notifyTicketReassigned = async (ticket, workerEmail, workerId) => {
   });
 };
 
+const logSystemNotification = async ({ recipientUserId, subject, body, deepLink, ticketId }) => {
+  // Find recipient email first
+  const user = await prisma.user.findUnique({
+    where: { id: recipientUserId },
+    select: { email: true }
+  });
+
+  if (!user) return null;
+
+  return sendEmail({
+    to: user.email,
+    subject,
+    body,
+    recipientUserId,
+    deepLink,
+    ticketId
+  });
+};
+
 module.exports = {
   sendEmail,
   getHtmlTemplate,
@@ -289,6 +308,7 @@ module.exports = {
   notifyTicketEscalated,
   notifyTicketRejected,
   notifyTicketReassigned,
+  logSystemNotification,
   verifyEmailConnection: async () => {
     if (env.MOCK_EMAIL) return true;
     try {

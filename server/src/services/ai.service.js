@@ -140,12 +140,20 @@ const classifyImage = async (imagePath) => {
       requiresManualReview: result.confidence < 0.75, // Flag if confidence is low
     };
   } catch (error) {
-    console.error('❌ AI classification failed:', error.message);
+    if (error.message.includes('PERMISSION_DENIED') || error.message.includes('Cloud Vision API has not been used')) {
+      console.error('\n🚫 [GCP ERROR] Vision API is disabled or permissions are missing.');
+      console.error('👉 Fix: Enable it at https://console.developers.google.com/apis/api/vision.googleapis.com/overview?project=YOUR_PROJECT_ID');
+      console.error('👉 Also check that your service account has the "Cloud Vision API User" role.\n');
+    } else {
+      console.error('❌ AI classification failed:', error.message);
+    }
+
     return {
       departmentId: null,
       label: null,
       confidence: null,
       requiresManualReview: true,
+      error: error.message
     };
   }
 };

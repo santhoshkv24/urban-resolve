@@ -2,13 +2,13 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 const variantClasses = {
-  primary:   'bg-primary hover:bg-primary-hover text-white shadow-ambient-sm hover:shadow-glow active:scale-95',
-  secondary: 'bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40 active:scale-95',
-  danger:    'bg-error hover:bg-red-700 text-white shadow-ambient-sm active:scale-95',
-  tertiary:  'hover:bg-surface-container text-on-surface-variant hover:text-on-surface active:scale-95',
+  primary:   'bg-primary hover:opacity-90 text-white active:scale-[0.98]',
+  secondary: 'bg-surface-container hover:bg-surface-container-high text-on-surface active:scale-[0.98]',
+  danger:    'bg-error hover:bg-red-700 text-white active:scale-[0.98]',
+  tertiary:  'hover:bg-surface-container text-on-surface-variant hover:text-on-surface active:scale-[0.98]',
   civic:     'btn-civic',
-  ghost:     'text-primary hover:bg-primary/8 border border-primary/30 hover:border-primary/60 active:scale-95',
-  outline:   'bg-transparent border border-outline-variant hover:bg-surface-container text-on-surface active:scale-95',
+  ghost:     'text-primary hover:bg-primary/5 active:scale-[0.98]',
+  outline:   'bg-transparent border border-outline-variant hover:bg-surface-container text-on-surface active:scale-[0.98]',
 };
 
 const sizeClasses = {
@@ -43,7 +43,7 @@ const Button = ({
       disabled={isDisabled}
       className={[
         'relative inline-flex items-center justify-center gap-2 font-semibold rounded-xl',
-        'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1',
+        'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30',
         'overflow-hidden',
         variantClasses[variant] ?? variantClasses.primary,
         sizeClasses[size] ?? sizeClasses.md,
@@ -52,10 +52,6 @@ const Button = ({
       ].join(' ')}
       {...props}
     >
-      {/* Shimmer overlay for non-civic variants */}
-      {!isDisabled && variant !== 'civic' && (
-        <span className="absolute inset-0 -translate-x-full hover:translate-x-[200%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
-      )}
       {loading ? (
         <Loader2 className="w-4 h-4 animate-spin shrink-0" />
       ) : (

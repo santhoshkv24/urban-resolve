@@ -8,7 +8,7 @@ import { Cpu } from 'lucide-react';
 const AIProcessingOverlay = ({ show }) => {
   if (!show) return null;
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-sans">
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center font-sans">
       <div className="bg-white px-10 py-12 rounded-3xl shadow-xl flex flex-col items-center border border-outline/20 max-w-md w-full animate-in fade-in zoom-in duration-300">
         <div className="relative mb-8">
           <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping"></div>
@@ -18,7 +18,7 @@ const AIProcessingOverlay = ({ show }) => {
         </div>
         <h2 className="text-2xl font-bold text-on-surface mb-3 tracking-tight text-center">AI is analyzing...</h2>
         <p className="text-on-surface-variant text-center leading-relaxed">
-          Our system is extracting visual features to instantly route your request to the correct municipal department.
+          Our system is extracting visual features to instantly route your request to the correct UrbanResolve department.
         </p>
       </div>
     </div>
@@ -240,7 +240,7 @@ const NewTicket = () => {
               >
                 <p className="text-sm font-bold">Private</p>
                 <p className="text-xs mt-1 text-on-surface-variant">
-                  Visible only to municipal staff for sensitive requests.
+                  Visible only to UrbanResolve staff for sensitive requests.
                 </p>
               </button>
             </div>

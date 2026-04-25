@@ -69,7 +69,7 @@ const UnifiedProfile = () => {
             {isStaff ? 'Staff Profile' : 'Citizen Account'}
           </h1>
           <p className="text-on-surface-variant text-sm mt-1">
-            Manage your {isStaff ? 'professional' : 'personal'} municipal identity
+            Manage your {isStaff ? 'professional' : 'personal'} UrbanResolve identity
           </p>
         </div>
         <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 font-bold text-xs uppercase tracking-widest border shadow-sm ${
@@ -234,7 +234,7 @@ const UnifiedProfile = () => {
             <div>
               <p className="text-sm font-bold text-slate-900 mb-1">Data Privacy Notice</p>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Your contact information is encrypted using AES-256-CBC. In accordance with municipal guidelines, this information is only accessible to department workers when actively resolving your assigned tickets.
+                Your contact information is encrypted using AES-256-CBC. In accordance with UrbanResolve guidelines, this information is only accessible to department workers when actively resolving your assigned tickets.
               </p>
             </div>
           </div>

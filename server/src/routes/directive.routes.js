@@ -63,4 +63,20 @@ router.post('/', authenticate, requireRole('OFFICER', 'ADMIN'), async (req, res)
   }
 });
 
+// ---- PUT /api/directives/:id/deactivate ----
+// Deactivate a specific directive
+router.put('/:id/deactivate', authenticate, requireRole('OFFICER', 'ADMIN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await prisma.directive.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    return sendSuccess(res, null, 200, 'Directive deactivated');
+  } catch (error) {
+    console.error('Deactivate directive error:', error);
+    return sendError(res, 'Failed to deactivate directive.');
+  }
+});
+
 module.exports = router;

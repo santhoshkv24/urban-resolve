@@ -103,9 +103,9 @@ const AppShell = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className="flex items-center gap-3 px-2 mb-8 mt-2">
-        <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shrink-0 shadow-xl border border-white/10 group-hover:scale-105 transition-transform duration-300">
-          <Sparkles className="w-5 h-5 text-secondary" />
+      <div className="flex items-center gap-3 px-1 mb-8 mt-2">
+        <div className="shrink-0 group-hover:scale-105 transition-transform duration-300">
+          <img src="/logo.png" alt="Urban Resolve" className="h-10 w-auto" />
         </div>
         <div>
           <h2 className="font-display font-bold text-on-surface text-base leading-tight tracking-tight">
@@ -194,9 +194,7 @@ const AppShell = () => {
         {/* Mobile Header */}
         <header className="lg:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-outline-variant/30 px-4 h-16 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-lg border border-white/10">
-              <Sparkles className="w-4 h-4 text-secondary" />
-            </div>
+            <img src="/logo.png" alt="Urban Resolve" className="h-8 w-auto" />
             <span className="font-display font-bold text-on-surface">Urban<span className="text-secondary">Resolve</span></span>
           </div>
           <div className="flex items-center gap-2">

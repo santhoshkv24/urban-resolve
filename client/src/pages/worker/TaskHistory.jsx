@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Calendar, FileText, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Loader2, Calendar, FileText, CheckCircle2, AlertTriangle, ArrowRight, ShieldAlert } from 'lucide-react';
 import apiClient from '../../api/client';
 import { getImageUrl } from '../../utils/imageUrl';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -91,9 +91,16 @@ const TaskHistory = () => {
                             <FileText className="h-5 w-5 opacity-50" />
                           </div>
                         )}
-                        <span className="text-on-surface font-medium max-w-xs truncate text-sm">
-                          {ticket.description || 'No description provided'}
-                        </span>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {ticket.interventions?.length > 0 && (
+                              <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Officer Intervention Recorded" />
+                            )}
+                            <span className="text-on-surface font-medium max-w-xs truncate text-sm">
+                              {ticket.description || 'No description provided'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">

@@ -173,6 +173,7 @@ router.get('/community-feed', requireRole('CITIZEN'), async (req, res) => {
     const where = {
       visibility: 'PUBLIC',
       status: { notIn: ['REJECTED'] },
+      citizenId: { not: req.user.userId },
       ...(departmentId ? { assignedDepartmentId: parseInt(departmentId) } : {}),
     };
 
@@ -504,7 +505,7 @@ router.get('/:id', async (req, res) => {
     }
 
     // Authorization check
-    if (req.user.role === 'CITIZEN' && ticket.citizenId !== req.user.userId) {
+    if (req.user.role === 'CITIZEN' && ticket.citizenId !== req.user.userId && ticket.visibility !== 'PUBLIC') {
       return sendError(res, 'Access denied.', 403, 'FORBIDDEN');
     }
 

@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { PageLoader } from '../../components/ui/Spinner';
-import { ArrowLeft, UserCheck, AlertTriangle, FileText, CheckCircle, MapPin, Sparkles, Map as MapIcon, Ban } from 'lucide-react';
+import { ArrowLeft, UserCheck, AlertTriangle, FileText, CheckCircle, MapPin, Sparkles, Map as MapIcon, Ban, ShieldAlert } from 'lucide-react';
 import { getImageUrl } from '../../utils/imageUrl';
 import ReadOnlyMap from '../../components/ui/ReadOnlyMap';
 import { formatDate } from '../../utils/dateUtils';
@@ -139,6 +139,25 @@ const AdminTicketDetail = () => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* ── Detail Panel ── */}
         <div className="xl:col-span-2 space-y-6">
+          {ticket.interventions?.length > 0 && (
+            <div className="p-5 rounded-2xl border-2 border-amber-300 bg-amber-50 shadow-sm animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-200 flex items-center justify-center">
+                  <ShieldAlert className="w-5 h-5 text-amber-800" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-amber-900 uppercase tracking-widest">Officer Intervention Active</h3>
+                  <p className="text-xs text-amber-700 font-bold">Flagged by {ticket.interventions[0].officer?.name}</p>
+                </div>
+              </div>
+              <div className="p-4 bg-white/60 rounded-xl border border-amber-200/50">
+                <p className="text-sm text-amber-900 font-bold leading-relaxed italic">
+                  "{ticket.interventions[0].note}"
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="p-6 lg:p-8 rounded-2xl border border-outline-variant/25 bg-white shadow-ambient-sm">
             <div className="flex flex-wrap items-start justify-between gap-4 mb-6 pb-6 border-b border-outline-variant/20">
               <div>
@@ -300,7 +319,7 @@ const AdminTicketDetail = () => {
                     ))}
                   </select>
                 </div>
-                <Button type="submit" variant="primary" className="w-full mt-2" disabled={!selectedWorker || processing} loading={processing}>
+                <Button type="submit" variant="civic" className="w-full mt-2" disabled={!selectedWorker || processing} loading={processing}>
                   Confirm Assignment
                 </Button>
               </form>

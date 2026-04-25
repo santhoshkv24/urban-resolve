@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, ClipboardList, Zap, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { MapPin, ClipboardList, Zap, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
 import apiClient from '../../api/client';
 import { getImageUrl } from '../../utils/imageUrl';
 import EmptyState from '../../components/ui/EmptyState';
@@ -109,7 +109,14 @@ const WorkerDashboard = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
                   
                   {/* Top Badges */}
-                  <div className="absolute top-3 right-3">
+                  <div className="absolute top-3 left-3 right-3 flex justify-between items-start pointer-events-none">
+                    <div>
+                      {ticket.interventions?.length > 0 && (
+                        <div className="bg-amber-500 text-white p-1.5 rounded-lg shadow-lg animate-pulse" title="Command Intervention Active">
+                          <ShieldAlert className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
                     <StatusBadge status={ticket.status} size="sm" />
                   </div>
                   

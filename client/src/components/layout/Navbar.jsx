@@ -16,8 +16,8 @@ const Navbar = () => {
   return (
     <nav className="glass-panel sticky top-0 z-50 border-b ghost-border">
       <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <Shield className="h-6 w-6 text-primary" />
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="Urban Resolve" className="h-8 w-auto" />
           <span className="font-display font-bold text-lg text-on-surface">
             Urban Resolve
           </span>

@@ -10,11 +10,9 @@ const AuthCard = ({ children }) => (
     <div className="w-full max-w-md">
       {/* Brand */}
       <div className="flex items-center justify-center gap-2.5 mb-8">
-        <div className="w-9 h-9 rounded-xl bg-gradient-civic flex items-center justify-center shadow-sm">
-          <Sparkles className="w-4 h-4 text-white" />
-        </div>
+        <img src="/logo.png" alt="Urban Resolve" className="h-9 w-auto" />
         <span className="font-display font-bold text-on-surface text-sm tracking-tight">
-          Municipal<span className="text-secondary">Desk</span>
+          Urban<span className="text-secondary">Resolve</span>
         </span>
       </div>
       <div className="glass-card rounded-3xl p-8 shadow-ambient-lg">
