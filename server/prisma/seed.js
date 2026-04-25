@@ -10,10 +10,30 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 const defaultDepartments = [
-  { name: 'Water Supply', description: 'Water supply, pipelines, and drainage issues', aiLabel: 'Water' },
-  { name: 'Electricity Board', description: 'Electrical infrastructure, streetlights, and power supply', aiLabel: 'Electricity' },
-  { name: 'Sanitation Department', description: 'Waste management, cleaning, and sanitation issues', aiLabel: 'Sanitation' },
-  { name: 'Roads & Infrastructure', description: 'Road maintenance, potholes, and construction', aiLabel: 'Roads' },
+  { 
+    name: 'Water Supply', 
+    description: 'Water supply, pipelines, and drainage issues', 
+    aiLabel: 'Water',
+    keywords: 'water, leak, pipe, pipe burst, tap, valve, pump, reservoir, tank, canal, drainage, sewer, flooding, moisture, wet'
+  },
+  { 
+    name: 'Electricity Board', 
+    description: 'Electrical infrastructure, streetlights, and power supply', 
+    aiLabel: 'Electricity',
+    keywords: 'electricity, power, light, streetlight, cable, wire, transformer, pole, spark, blackout, meter, current, high voltage'
+  },
+  { 
+    name: 'Sanitation Department', 
+    description: 'Waste management, cleaning, and sanitation issues', 
+    aiLabel: 'Sanitation',
+    keywords: 'garbage, waste, trash, bin, litter, sweep, dustbin, landfill, foul smell, septic, public toilet, hygiene, cleaning'
+  },
+  { 
+    name: 'Roads & Infrastructure', 
+    description: 'Road maintenance, potholes, and construction', 
+    aiLabel: 'Roads',
+    keywords: 'road, highway, street, lane, roadway, expressway, freeway, asphalt, pavement, concrete road, gravel road, lane markings, divider, median, shoulder, zebra crossing, pedestrian crossing, speed breaker, curb, sidewalk, footpath, traffic signal, traffic light, stop sign, signboard, road sign, direction sign, toll booth, checkpoint, bridge, flyover, overpass, underpass, tunnel, culvert, retaining wall, drainage system, road construction, road work, excavation, barricade, construction equipment, crane, asphalt laying, repair work, pothole, resurfacing, urban road, rural road, city street, intersection, junction, roundabout, roadside buildings, street lights, damaged road, potholes, wet road, flooded road, dusty road, night road, empty road, heavy traffic, low visibility, infrastructure damage, smart city, highway infrastructure, transport network, road safety, construction zone'
+  },
 ];
 
 async function main() {
@@ -26,7 +46,11 @@ async function main() {
       await prisma.department.create({ data: dept });
       console.log(`   ✅ Department created: ${dept.name}`);
     } else {
-      console.log(`   ⏭️  Department exists: ${dept.name}`);
+      await prisma.department.update({
+        where: { id: existing.id },
+        data: { keywords: dept.keywords }
+      });
+      console.log(`   🔄 Department updated (keywords): ${dept.name}`);
     }
   }
 

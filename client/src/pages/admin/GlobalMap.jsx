@@ -25,7 +25,8 @@ const GlobalMap = () => {
     const fetchActiveTickets = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/tickets?limit=100', {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const res = await fetch(`${baseUrl}/tickets?limit=100`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();

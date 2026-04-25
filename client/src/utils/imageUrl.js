@@ -5,7 +5,7 @@
  * Usage:
  *   <img src={getImageUrl(ticket.imageUrl)} />
  */
-const BACKEND_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const BACKEND_BASE = (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : null) || 'http://localhost:5000';
 
 export const getImageUrl = (path) => {
   if (!path) return null;

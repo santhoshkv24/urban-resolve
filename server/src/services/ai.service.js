@@ -37,31 +37,11 @@ if (env.AI_SERVICE_TYPE === 'google_vision') {
   }
 }
 
-// Category Mapping (GCP Labels -> Municipal Departments)
-const MAPPING = {
-  'Water': ['water', 'pipe', 'plumbing', 'leak', 'fluid', 'flood', 'fountain', 'river', 'stream'],
-  'Electricity': ['electricity', 'wire', 'cable', 'transformer', 'power line', 'utility pole', 'light', 'lamp', 'electronics'],
-  'Sanitation': ['waste', 'garbage', 'trash', 'litter', 'pollution', 'sanitation', 'plastic', 'debris', 'sewage', 'drain'],
-  'Roads': ['road', 'asphalt', 'pothole', 'street', 'highway', 'infrastructure', 'crack', 'pavement', 'curb', 'sidewalk'],
-};
-
-/**
- * Mock AI classifier — randomly picks a category with a confidence score.
- * Fallback when Google Vision is disabled or fails.
- */
-const classifyImageMock = async (imagePath) => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const labels = Object.keys(MAPPING);
-  const label = labels[Math.floor(Math.random() * labels.length)];
-  const confidence = parseFloat((0.70 + Math.random() * 0.25).toFixed(4));
-  return { label, confidence };
-};
-
 /**
  * Classify image using Google Cloud Vision
  * Returns the best matching municipal category based on detected labels.
  */
-const classifyImageWithVision = async (imagePath) => {
+const classifyImageWithVision = async (imagePath, departments) => {
   if (!client) throw new Error('Vision client not initialized');
 
   // Perform label detection
@@ -69,21 +49,30 @@ const classifyImageWithVision = async (imagePath) => {
   const labels = result.labelAnnotations;
 
   if (!labels || labels.length === 0) {
-    return { label: null, confidence: 0 };
+    return { departmentId: null, label: null, confidence: 0 };
   }
 
-  // Find the best match across our categories
-  let bestMatch = { label: null, confidence: 0 };
+  // Find the best match across our departments' keywords
+  let bestMatch = { departmentId: null, label: null, confidence: 0 };
 
-  for (const label of labels) {
-    const description = label.description.toLowerCase();
-    const score = label.score;
+  for (const annotation of labels) {
+    const description = annotation.description.toLowerCase();
+    const score = annotation.score;
 
-    for (const [category, keywords] of Object.entries(MAPPING)) {
-      if (keywords.some(k => description.includes(k))) {
+    for (const dept of departments) {
+      if (!dept.keywords) continue;
+      
+      const keywords = dept.keywords.split(',').map(k => k.trim().toLowerCase());
+      
+      // Check if any keyword is contained in the GCP description OR vice versa
+      if (keywords.some(k => description.includes(k) || k.includes(description))) {
         // If multiple labels match, we take the one with the highest GCP score
         if (score > bestMatch.confidence) {
-          bestMatch = { label: category, confidence: score };
+          bestMatch = { 
+            departmentId: dept.id, 
+            label: dept.aiLabel || dept.name, 
+            confidence: score 
+          };
         }
       }
     }
@@ -93,46 +82,51 @@ const classifyImageWithVision = async (imagePath) => {
 };
 
 /**
+ * Mock AI classifier — randomly picks a category with a confidence score.
+ */
+const classifyImageMock = async (departments) => {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const dept = departments[Math.floor(Math.random() * departments.length)];
+  const confidence = parseFloat((0.70 + Math.random() * 0.25).toFixed(4));
+  return { 
+    departmentId: dept.id, 
+    label: dept.aiLabel || dept.name, 
+    confidence 
+  };
+};
+
+/**
  * Main classification interface
  */
 const classifyImage = async (imagePath) => {
   try {
+    const departments = await prisma.department.findMany({
+      where: { isActive: true }
+    });
+
+    if (departments.length === 0) {
+      throw new Error('No active departments found for classification');
+    }
+
     let result;
 
     if (env.AI_SERVICE_TYPE === 'google_vision' && client) {
-      result = await classifyImageWithVision(imagePath);
+      result = await classifyImageWithVision(imagePath, departments);
       
       // Fallback to mock if no relevant labels were found
-      if (!result.label) {
+      if (!result.departmentId) {
         console.log('ℹ️ Google Vision found no matching labels. Falling back to mock for demo.');
-        result = await classifyImageMock(imagePath);
+        result = await classifyImageMock(departments);
       }
     } else {
-      result = await classifyImageMock(imagePath);
-    }
-
-    // Map the classification label to a department
-    const department = await prisma.department.findFirst({
-      where: {
-        aiLabel: result.label,
-        isActive: true,
-      },
-    });
-
-    if (department) {
-      return {
-        departmentId: department.id,
-        label: result.label,
-        confidence: result.confidence,
-        requiresManualReview: result.confidence < 0.75, // Flag if confidence is low
-      };
+      result = await classifyImageMock(departments);
     }
 
     return {
-      departmentId: null,
+      departmentId: result.departmentId,
       label: result.label,
       confidence: result.confidence,
-      requiresManualReview: true,
+      requiresManualReview: result.confidence < 0.75, // Flag if confidence is low
     };
   } catch (error) {
     console.error('❌ AI classification failed:', error.message);

@@ -41,6 +41,7 @@ model Department {
   name               String   @unique @db.VarChar(255)
   description        String?
   aiLabel            String?  @unique @map("ai_label") @db.VarChar(100)
+  keywords           String?  @db.Text
   defaultSlaHours    Int      @default(48) @map("default_sla_hours")
   isActive           Boolean  @default(true) @map("is_active")
   createdAt          DateTime @default(now()) @map("created_at")
