@@ -21,14 +21,14 @@ const AdminDepartments = () => {
     name: '',
     description: '',
     aiLabel: '',
-    aiKeywords: ''
+    keywords: ''
   });
 
   const [editData, setEditData] = useState({
     name: '',
     description: '',
     aiLabel: '',
-    aiKeywords: '',
+    keywords: '',
     isActive: true,
   });
 
@@ -61,7 +61,7 @@ const AdminDepartments = () => {
         name: formData.name,
         description: formData.description,
         aiLabel: formData.aiLabel,
-        aiKeywords: formData.aiKeywords.split(',').map(kw => kw.trim()).filter(Boolean)
+        keywords: formData.keywords
       };
 
       await apiClient.post('/admin/departments', payload);
@@ -83,7 +83,7 @@ const AdminDepartments = () => {
       name: department.name || '',
       description: department.description || '',
       aiLabel: department.aiLabel || '',
-      aiKeywords: (department.aiKeywords || []).join(', '),
+      keywords: department.keywords || '',
       isActive: Boolean(department.isActive),
     });
   };
@@ -104,7 +104,7 @@ const AdminDepartments = () => {
         name: editData.name,
         description: editData.description,
         aiLabel: editData.aiLabel || null,
-        aiKeywords: editData.aiKeywords.split(',').map((kw) => kw.trim()).filter(Boolean),
+        keywords: editData.keywords,
         isActive: editData.isActive,
       };
 
@@ -135,8 +135,7 @@ const AdminDepartments = () => {
   };
 
   const filteredDepartments = departments.filter((department) => {
-    const keywordBlob = (department.aiKeywords || []).join(' ');
-    const haystack = `${department.name} ${department.description || ''} ${department.aiLabel || ''} ${keywordBlob}`.toLowerCase();
+    const haystack = `${department.name} ${department.description || ''} ${department.aiLabel || ''} ${department.keywords || ''}`.toLowerCase();
     return haystack.includes(searchText.toLowerCase());
   });
 
@@ -187,8 +186,8 @@ const AdminDepartments = () => {
             <div>
                <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">AI Keywords (comma separated)</label>
                <textarea 
-                  value={formData.aiKeywords} 
-                  onChange={e=>setFormData({...formData, aiKeywords: e.target.value})} 
+                  value={formData.keywords} 
+                  onChange={e=>setFormData({...formData, keywords: e.target.value})} 
                   placeholder="water, pipe, leak, drainage" 
                   className="w-full rounded-xl border border-outline-variant/50 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow resize-none"
                   rows={3}
@@ -240,8 +239,8 @@ const AdminDepartments = () => {
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">AI Keywords (comma separated)</label>
               <textarea
-                value={editData.aiKeywords}
-                onChange={(e) => setEditData({ ...editData, aiKeywords: e.target.value })}
+                value={editData.keywords}
+                onChange={(e) => setEditData({ ...editData, keywords: e.target.value })}
                 className="w-full rounded-xl border border-outline-variant/50 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow resize-none"
                 rows={3}
               />
@@ -306,8 +305,8 @@ const AdminDepartments = () => {
                     <div className="text-[10px] font-black uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full inline-block mb-1.5">
                       Label: {dept.aiLabel}
                     </div>
-                    <div className="text-xs font-medium text-on-surface-variant truncate max-w-[200px]" title={dept.aiKeywords?.join(', ')}>
-                      {dept.aiKeywords?.join(', ') || 'No keywords'}
+                    <div className="text-xs font-medium text-on-surface-variant truncate max-w-[200px]" title={dept.keywords}>
+                      {dept.keywords || 'No keywords'}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center font-bold text-on-surface">{dept._count?.workers || 0}</td>

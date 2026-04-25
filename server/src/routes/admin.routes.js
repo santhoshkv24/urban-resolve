@@ -72,9 +72,7 @@ router.get('/departments/:id', async (req, res) => {
 
 // ---- POST /api/admin/departments ----
 // Create a new department
-router.post('/departments', requireFields('name'), async (req, res) => {
-  try {
-    const { name, description, aiLabel } = req.body;
+    const { name, description, aiLabel, keywords } = req.body;
 
     // Check for duplicate name
     const existing = await prisma.department.findUnique({ where: { name } });
@@ -87,6 +85,7 @@ router.post('/departments', requireFields('name'), async (req, res) => {
         name,
         description: description || null,
         aiLabel: aiLabel || null,
+        keywords: Array.isArray(keywords) ? keywords.join(', ') : (keywords || null),
       },
     });
 
@@ -102,7 +101,7 @@ router.post('/departments', requireFields('name'), async (req, res) => {
 router.put('/departments/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, description, aiLabel, isActive } = req.body;
+    const { name, description, aiLabel, keywords, isActive } = req.body;
 
     const existing = await prisma.department.findUnique({ where: { id } });
     if (!existing) {
@@ -123,6 +122,7 @@ router.put('/departments/:id', async (req, res) => {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
         ...(aiLabel !== undefined && { aiLabel }),
+        ...(keywords !== undefined && { keywords: Array.isArray(keywords) ? keywords.join(', ') : keywords }),
         ...(isActive !== undefined && { isActive }),
       },
     });
