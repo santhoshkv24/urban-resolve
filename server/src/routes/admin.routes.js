@@ -70,8 +70,8 @@ router.get('/departments/:id', async (req, res) => {
   }
 });
 
-// ---- POST /api/admin/departments ----
-// Create a new department
+router.post('/departments', requireFields('name'), async (req, res) => {
+  try {
     const { name, description, aiLabel, keywords } = req.body;
 
     // Check for duplicate name

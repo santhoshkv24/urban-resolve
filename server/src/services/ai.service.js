@@ -44,9 +44,20 @@ if (env.AI_SERVICE_TYPE === 'google_vision') {
 const classifyImageWithVision = async (imagePath, departments) => {
   if (!client) throw new Error('Vision client not initialized');
 
+  // Handle remote URLs (Cloudinary) vs Local paths
+  const request = {
+    image: imagePath.startsWith('http') 
+      ? { source: { imageUri: imagePath } } 
+      : { content: imagePath }
+  };
+
   // Perform label detection
-  const [result] = await client.labelDetection(imagePath);
+  const [result] = await client.labelDetection(request);
   const labels = result.labelAnnotations;
+
+  console.log(`🔍 AI Detected Labels for ${imagePath.substring(0, 50)}...:`, 
+    labels?.map(l => `${l.description} (${Math.round(l.score * 100)}%)`).join(', ')
+  );
 
   if (!labels || labels.length === 0) {
     return { departmentId: null, label: null, confidence: 0 };
